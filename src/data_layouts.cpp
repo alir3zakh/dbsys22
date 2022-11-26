@@ -10,20 +10,23 @@ DataLayout MyNaiveRowLayoutFactory::make(std::vector<const Type*> types, std::si
 {
     // TODO 1.2: implement computing a row layout
     DataLayout DL;
-    auto &row = DL.add_inode(1, 224 * 8);
-    row.add_leaf(Type::Get_Integer(Type::TY_Vector, 4), 0, 0, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 10), 1, 32, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 32), 2, 128, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 20), 3, 384, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 80), 4, 544, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 32), 5, 1184, 0);
-    row.add_leaf(Type::Get_Integer(Type::TY_Vector, 8), 6, 1440, 0);
-    row.add_leaf(Type::Get_Char(Type::TY_Vector, 32), 7, 1502, 0);
-    row.add_leaf(Type::Get_Bitmap(Type::TY_Vector, 8), 8, 1760, 0);
+    int INode_stride = 0;
+    for (auto& type : types)
+        INode_stride += ((type->size()-1) / 32 + 1) * 32;
 
+    auto &row = DL.add_inode(1, INode_stride + 32);
+    int cur_offset = 0, idx = 0;
+
+    for (auto& type : types)
+    {
+        row.add_leaf(type, idx++, cur_offset, 0);
+        cur_offset += ((type->size()-1) / 32 + 1) * 32;
+    }
+    
+    row.add_leaf(Type::Get_Bitmap(Type::TY_Vector, idx), idx, cur_offset, 0);
 
     for(auto e: types) {
-        std::cout << *e << ' ' << e->size() << ' ' << e->alignment() << ' ' << e->is_date() << std::endl;
+        std::cout << *e << ' ' << e->size() << ' ' << e->alignment() << ' ' << std::endl;
     }
 
     return DL;
