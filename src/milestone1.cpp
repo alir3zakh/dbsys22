@@ -58,7 +58,7 @@ int main(int argc, const char **argv)
         exit(EXIT_FAILURE);
 
     /* Process the SQL file. */
-    // m::execute_file(diag, argv[3]);
+    m::execute_file(diag, argv[3]);
 
     m::Catalog::Destroy();
     exit(EXIT_SUCCESS);
