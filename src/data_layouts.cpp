@@ -19,7 +19,7 @@ DataLayout MyNaiveRowLayoutFactory::make(std::vector<const Type*> types, std::si
         // updating max alignemnt seen until now
         max_elem_alignemnt = std::max(max_elem_alignemnt, type->alignment());
 
-        // extending inode stride by the amount of current type (leaf in feature)
+        // extending inode stride by the size + padding of current type (leaf in feature)
         if(INode_stride % type->alignment())
             INode_stride = (INode_stride / type->alignment() + 1) * type->alignment();
         INode_stride += type->size();
@@ -42,6 +42,7 @@ DataLayout MyNaiveRowLayoutFactory::make(std::vector<const Type*> types, std::si
     int cur_offset = 0, idx = 0;
 
     for (auto& type : types){
+        // beginning of current lead should by a multiply of the leaf's alignment
         if(cur_offset % type->alignment())
             cur_offset = (cur_offset / type->alignment() + 1) * type->alignment();
 
@@ -53,10 +54,6 @@ DataLayout MyNaiveRowLayoutFactory::make(std::vector<const Type*> types, std::si
     
     // Bitmap leaf
     row.add_leaf(Type::Get_Bitmap(Type::TY_Vector, idx), idx, cur_offset, 0);
-
-    for(auto& t: types)
-        std::cout << *t << " " << t->alignment() << " " << t->size() << std::endl;
-    std::cout << "-----------------------------" << std::endl;
 
     return DL;
 }
@@ -70,7 +67,7 @@ DataLayout MyOptimizedRowLayoutFactory::make(std::vector<const Type*> types, std
     for (auto ind = 0; ind < types.size(); ind++)
         types_indices.push_back(std::make_pair(types[ind], ind));
 
-    // sorting types in decnding order of their alignment
+    // sorting types in descending order of their alignment
     std::sort(types_indices.begin(), types_indices.end(), [](auto a, auto b) {
         return a.first->alignment() > b.first->alignment();
     });
@@ -81,21 +78,22 @@ DataLayout MyOptimizedRowLayoutFactory::make(std::vector<const Type*> types, std
     uint64_t max_elem_alignemnt = types_indices.front().first->alignment();
 
     for (auto& type : types_indices){
-        // extending inode stride by the amount of current type (leaf in feature)
-        INode_stride += ((type.first->size()-1) / type.first->alignment() + 1)
-         * type.first->alignment();
+        // extending inode stride by the size + padding of current type (leaf in feature)
+        if(INode_stride % type.first->alignment())
+            INode_stride = (INode_stride / type.first->alignment() + 1) * type.first->alignment();
+
+        INode_stride += type.first->size();
     }
 
     // Since minimum memory unit access is Byte, alignemnt could not be smaller
     max_elem_alignemnt = std::max(max_elem_alignemnt, uint64_t(8));
 
     // adding enough stride for NULL BITMAP
-    if(types_indices.back().first->size() % max_elem_alignemnt == 0)
-        INode_stride += max_elem_alignemnt;
+    INode_stride += types.size();
 
     // IF the stride is not a multiply of alignment, rounding it up to next multiply of alignment
     if(INode_stride % max_elem_alignemnt)
-        INode_stride = ((INode_stride + types.size() - 1) / max_elem_alignemnt + 1) * max_elem_alignemnt;
+        INode_stride = ((INode_stride - 1) / max_elem_alignemnt + 1) * max_elem_alignemnt;
 
     // Creading the inode
     auto &row = DL.add_inode(1, INode_stride);
@@ -106,11 +104,14 @@ DataLayout MyOptimizedRowLayoutFactory::make(std::vector<const Type*> types, std
     std::vector<int> offset(types.size());
 
     for (auto& type : types_indices){
+        // beginning of current lead should by a multiply of the leaf's alignment
+        if(cur_offset % type.first->alignment())
+            cur_offset = (cur_offset / type.first->alignment() + 1) * type.first->alignment();
+
         offset[type.second] = cur_offset;
 
         // computing offset for next leaf
-        cur_offset += ((type.first->size()-1) / type.first->alignment() + 1) 
-        * type.first->alignment();
+        cur_offset += type.first->size();
     }
 
     //sorting types to initial order
