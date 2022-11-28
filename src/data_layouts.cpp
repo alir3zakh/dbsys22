@@ -20,39 +20,43 @@ DataLayout MyNaiveRowLayoutFactory::make(std::vector<const Type*> types, std::si
         max_elem_alignemnt = std::max(max_elem_alignemnt, type->alignment());
 
         // extending inode stride by the amount of current type (leaf in feature)
-        INode_stride += ((type->size()-1) / max_elem_alignemnt + 1) * max_elem_alignemnt;
+        if(INode_stride % type->alignment())
+            INode_stride = (INode_stride / type->alignment() + 1) * type->alignment();
+        INode_stride += type->size();
     }
 
     // Since minimum memory unit access is Byte, alignemnt could not be smaller
     max_elem_alignemnt = std::max(max_elem_alignemnt, uint64_t(8));
 
     // adding enough stride for NULL BITMAP
-    if(types.back()->size() % max_elem_alignemnt == 0)
-        INode_stride += max_elem_alignemnt;
+    INode_stride += types.size();
 
-    // IF the stride is not a multiply of alignment, rounding it up to next multiply of alignment
+    // IF the stride is not a multiply of alignment, rounding it up to next multiply of max alignment
     if(INode_stride % max_elem_alignemnt)
-        INode_stride = ((INode_stride + types.size() - 1) / max_elem_alignemnt + 1) * max_elem_alignemnt;
+        INode_stride = ((INode_stride - 1) / max_elem_alignemnt + 1) * max_elem_alignemnt;
 
     // Creading the inode
     auto &row = DL.add_inode(1, INode_stride);
 
     // Adding leafs to inode
     int cur_offset = 0, idx = 0;
-    uint64_t max_elem_alignemnt_till_now = 1;
 
     for (auto& type : types){
+        if(cur_offset % type->alignment())
+            cur_offset = (cur_offset / type->alignment() + 1) * type->alignment();
+
         row.add_leaf(type, idx++, cur_offset, 0);
 
-        // updating max alignemnt seen until now
-        max_elem_alignemnt_till_now = std::max(max_elem_alignemnt_till_now, type->alignment());
-
         // computing offset for next leaf
-        cur_offset += ((type->size()-1) / max_elem_alignemnt_till_now + 1) * max_elem_alignemnt_till_now;
+        cur_offset += type->size();
     }
     
     // Bitmap leaf
     row.add_leaf(Type::Get_Bitmap(Type::TY_Vector, idx), idx, cur_offset, 0);
+
+    for(auto& t: types)
+        std::cout << *t << " " << t->alignment() << " " << t->size() << std::endl;
+    std::cout << "-----------------------------" << std::endl;
 
     return DL;
 }
