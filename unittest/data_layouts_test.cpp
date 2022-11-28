@@ -455,6 +455,166 @@ TEST_CASE("NaiveRowLayout", "[milestone1]")
         CHECK(null_bitmap->type()->is_bitmap());
         CHECK(null_bitmap->type()->size() == 5);
     }
+
+    SECTION("wide table")
+    {
+        table.push_back(C.pool("a_i4"), m::Type::Get_Integer(m::Type::TY_Vector, 4));   // 0:32
+        table.push_back(C.pool("b_b"),  m::Type::Get_Boolean(m::Type::TY_Vector));      // 32:33
+        table.push_back(C.pool("c_c3"), m::Type::Get_Char(m::Type::TY_Vector, 3));      // 40:64
+        table.push_back(C.pool("d_b"),  m::Type::Get_Boolean(m::Type::TY_Vector));      // 64:65
+        table.push_back(C.pool("e_d"),  m::Type::Get_Double(m::Type::TY_Vector));       // 128:192
+        table.push_back(C.pool("f_i1"), m::Type::Get_Integer(m::Type::TY_Vector, 1));   // 192:200
+        table.push_back(C.pool("g_f"),  m::Type::Get_Float(m::Type::TY_Vector));        // 224:256
+        table.push_back(C.pool("h_c5"), m::Type::Get_Char(m::Type::TY_Vector, 5));      // 256:296
+        table.push_back(C.pool("i_b"),  m::Type::Get_Boolean(m::Type::TY_Vector));      // 296:297
+        table.push_back(C.pool("j_i2"), m::Type::Get_Integer(m::Type::TY_Vector, 2));   // 304:320
+        table.push_back(C.pool("k_b"),  m::Type::Get_Boolean(m::Type::TY_Vector));      // 320:321
+        table.push_back(C.pool("l_i2"), m::Type::Get_Integer(m::Type::TY_Vector, 2));   // 336:352
+        // NULL bitmap: 352:364
+
+        /* Create store and data layout. */
+        table.store(C.create_store(table));
+        table.layout(C.data_layout("row_naive"));
+        const auto &layout = table.layout();
+
+        /* Root must be an indefinite sequence of rows. */
+        CHECK(not layout.is_finite());
+
+        /* Check stride of row. */
+        CHECK(layout.stride_in_bits() == 384);
+
+        auto &child_node = layout.child();
+
+        /* Check that the child INode models a single row. */
+        CHECK(child_node.num_tuples() == 1);
+
+        /* Check that child node is an INode. */
+        auto inode = cast<const DataLayout::INode>(&child_node);
+        REQUIRE(inode);
+
+        /* Validate the INode. */
+        CHECK(inode->num_children() == 13);
+        /* a_i4 */
+        CHECK(inode->at(0).offset_in_bits == 0);
+        CHECK(inode->at(0).stride_in_bits == 0);
+        /* b_b */
+        CHECK(inode->at(1).offset_in_bits == 32);
+        CHECK(inode->at(1).stride_in_bits == 0);
+        /* c_c3 */
+        CHECK(inode->at(2).offset_in_bits == 40);
+        CHECK(inode->at(2).stride_in_bits == 0);
+        /* d_b */
+        CHECK(inode->at(3).offset_in_bits == 64);
+        CHECK(inode->at(3).stride_in_bits == 0);
+        /* e_d */
+        CHECK(inode->at(4).offset_in_bits == 128);
+        CHECK(inode->at(4).stride_in_bits == 0);
+        /* f_i1 */
+        CHECK(inode->at(5).offset_in_bits == 192);
+        CHECK(inode->at(5).stride_in_bits == 0);
+        /* g_f */
+        CHECK(inode->at(6).offset_in_bits == 224);
+        CHECK(inode->at(6).stride_in_bits == 0);
+        /* h_c5 */
+        CHECK(inode->at(7).offset_in_bits == 256);
+        CHECK(inode->at(7).stride_in_bits == 0);
+        /* i_b */
+        CHECK(inode->at(8).offset_in_bits == 296);
+        CHECK(inode->at(8).stride_in_bits == 0);
+        /* j_i2 */
+        CHECK(inode->at(9).offset_in_bits == 304);
+        CHECK(inode->at(9).stride_in_bits == 0);
+        /* k_b */
+        CHECK(inode->at(10).offset_in_bits == 320);
+        CHECK(inode->at(10).stride_in_bits == 0);
+        /* l_i2 */
+        CHECK(inode->at(11).offset_in_bits == 336);
+        CHECK(inode->at(11).stride_in_bits == 0);
+
+        auto attr_a_i4 = cast<const DataLayout::Leaf>(inode->at(0).ptr.get());
+        REQUIRE(attr_a_i4);
+        CHECK(attr_a_i4->num_tuples() == 1);
+        CHECK(attr_a_i4->index() == 0);
+        CHECK(attr_a_i4->type()->is_integral());
+        CHECK(attr_a_i4->type()->size() == 32);
+
+        auto attr_b_b = cast<const DataLayout::Leaf>(inode->at(1).ptr.get());
+        REQUIRE(attr_b_b);
+        CHECK(attr_b_b->num_tuples() == 1);
+        CHECK(attr_b_b->index() == 1);
+        CHECK(attr_b_b->type()->is_boolean());
+        CHECK(attr_b_b->type()->size() == 1);
+
+        auto attr_c_c3 = cast<const DataLayout::Leaf>(inode->at(2).ptr.get());
+        REQUIRE(attr_c_c3);
+        CHECK(attr_c_c3->num_tuples() == 1);
+        CHECK(attr_c_c3->index() == 2);
+        CHECK(attr_c_c3->type()->is_character_sequence());
+        CHECK(attr_c_c3->type()->size() == 24);
+
+        auto attr_d_b = cast<const DataLayout::Leaf>(inode->at(3).ptr.get());
+        REQUIRE(attr_d_b);
+        CHECK(attr_d_b->num_tuples() == 1);
+        CHECK(attr_d_b->index() == 3);
+        CHECK(attr_d_b->type()->is_boolean());
+        CHECK(attr_d_b->type()->size() == 1);
+
+        auto attr_e_d = cast<const DataLayout::Leaf>(inode->at(4).ptr.get());
+        REQUIRE(attr_e_d);
+        CHECK(attr_e_d->num_tuples() == 1);
+        CHECK(attr_e_d->index() == 4);
+        CHECK(attr_e_d->type()->is_double());
+        CHECK(attr_e_d->type()->size() == 64);
+
+        auto attr_f_i1 = cast<const DataLayout::Leaf>(inode->at(5).ptr.get());
+        REQUIRE(attr_f_i1);
+        CHECK(attr_f_i1->num_tuples() == 1);
+        CHECK(attr_f_i1->index() == 5);
+        CHECK(attr_f_i1->type()->is_integral());
+        CHECK(attr_f_i1->type()->size() == 8);
+
+        auto attr_g_f = cast<const DataLayout::Leaf>(inode->at(6).ptr.get());
+        REQUIRE(attr_g_f);
+        CHECK(attr_g_f->num_tuples() == 1);
+        CHECK(attr_g_f->index() == 6);
+        CHECK(attr_g_f->type()->is_float());
+        CHECK(attr_g_f->type()->size() == 32);
+
+        auto attr_h_c5 = cast<const DataLayout::Leaf>(inode->at(7).ptr.get());
+        REQUIRE(attr_h_c5);
+        CHECK(attr_h_c5->num_tuples() == 1);
+        CHECK(attr_h_c5->index() == 7);
+        CHECK(attr_h_c5->type()->is_character_sequence());
+        CHECK(attr_h_c5->type()->size() == 40);
+
+        auto attr_i_b = cast<const DataLayout::Leaf>(inode->at(8).ptr.get());
+        REQUIRE(attr_i_b);
+        CHECK(attr_i_b->num_tuples() == 1);
+        CHECK(attr_i_b->index() == 8);
+        CHECK(attr_i_b->type()->is_boolean());
+        CHECK(attr_i_b->type()->size() == 1);
+
+        auto attr_j_i2 = cast<const DataLayout::Leaf>(inode->at(9).ptr.get());
+        REQUIRE(attr_j_i2);
+        CHECK(attr_j_i2->num_tuples() == 1);
+        CHECK(attr_j_i2->index() == 9);
+        CHECK(attr_j_i2->type()->is_integral());
+        CHECK(attr_j_i2->type()->size() == 16);
+
+        auto attr_k_b = cast<const DataLayout::Leaf>(inode->at(10).ptr.get());
+        REQUIRE(attr_k_b);
+        CHECK(attr_k_b->num_tuples() == 1);
+        CHECK(attr_k_b->index() == 10);
+        CHECK(attr_k_b->type()->is_boolean());
+        CHECK(attr_k_b->type()->size() == 1);
+
+        auto attr_l_i2 = cast<const DataLayout::Leaf>(inode->at(11).ptr.get());
+        REQUIRE(attr_l_i2);
+        CHECK(attr_l_i2->num_tuples() == 1);
+        CHECK(attr_l_i2->index() == 11);
+        CHECK(attr_l_i2->type()->is_integral());
+        CHECK(attr_l_i2->type()->size() == 16);
+    }
 }
 
 TEST_CASE("OptimizedRowLayout", "[milestone1]")

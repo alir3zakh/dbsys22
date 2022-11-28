@@ -1,6 +1,7 @@
 #include "data_layouts.hpp"
 #include <cassert>
 #include <chrono>
+#include <iomanip>
 #include <iostream>
 #include <mutable/util/macro.hpp>
 #include <sstream>
@@ -9,7 +10,7 @@
 #ifndef NDEBUG
 constexpr int32_t NUM_TUPLES_RW = 5e5;
 #else
-constexpr int32_t NUM_TUPLES_RW = 2e7;
+constexpr int32_t NUM_TUPLES_RW = 5e6;
 #endif
 
 
@@ -64,50 +65,63 @@ void benchmark_store(const char *name)
     /* Evaluate read/write performance - full table scan. */
     {
         /* Create a simple table to evaluate read performance. */
-        auto &tbl_short = DB.add_table(C.pool("full_scan"));
-        tbl_short.push_back(C.pool("key"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
-        tbl_short.push_back(C.pool("value"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
-        tbl_short.store(C.create_store(tbl_short));
-        tbl_short.layout(C.data_layout().make(tbl_short.schema()));
+        auto &table = DB.add_table(C.pool("full_scan"));
+        table.push_back(C.pool("key"),    m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value0"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value1"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value2"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.store(C.create_store(table));
+        table.layout(C.data_layout().make(table.schema()));
 
         /* Get a handle on the backing store, create a writer, and an I/O tuple. */
-        auto &store = tbl_short.store();
+        auto &store = table.store();
         m::StoreWriter W(store);
-        m::Tuple tup(W.schema());
+        m::Tuple tup(table.schema());
 
         for (int32_t i = 0; i != NUM_TUPLES_RW; ++i) {
             /* Set tuple data (i, 2*i). */
             tup.set(0, i);
             tup.set(1, i<<1);
+            tup.set(2, i<<1);
+            tup.set(3, i<<1);
             W.append(tup);
         }
 
-        auto stmt = m::statement_from_string(diag, "SELECT key, value FROM full_scan;");
+        auto stmt = m::statement_from_string(diag, "SELECT key, value0, value1, value2 FROM full_scan;");
         auto query = as<m::SelectStmt>(std::move(stmt));
 
-        std::ostringstream oss;
-        auto op = std::make_unique<m::NoOpOperator>(oss);
+        uint64_t checksum = 0;
+        auto op = std::make_unique<m::CallbackOperator>([&checksum](const m::Schema&, const m::Tuple &T) {
+                checksum += T.get(0).as_i() * 3;
+                checksum += T.get(1).as_i() * 5;
+                checksum += T.get(2).as_i() * 7;
+                checksum += T.get(3).as_i() * 11;
+        });
 
         using namespace std::chrono;
         auto t_read_begin = steady_clock::now();
         m::execute_query(diag, *query, std::move(op));
         auto t_read_end = steady_clock::now();
 
-        std::cout << "milestone1,full_scan," << name << ',' << duration_cast<milliseconds>(t_read_end - t_read_begin).count() << '\n';
+        std::cout << "milestone1,full_scan," << name << ','
+                  << duration_cast<milliseconds>(t_read_end - t_read_begin).count() << ','
+                  << std::hex << checksum << std::dec
+                  << '\n';
     }
 
     /* Evaluate read/write performance - partial table scan. */
     {
         /* Create a simple table to evaluate read performance. */
-        auto &tbl_short = DB.add_table(C.pool("partial_scan"));
-        tbl_short.push_back(C.pool("key"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
-        tbl_short.push_back(C.pool("value1"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
-        tbl_short.push_back(C.pool("value2"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
-        tbl_short.store(C.create_store(tbl_short));
-        tbl_short.layout(C.data_layout().make(tbl_short.schema()));
+        auto &table = DB.add_table(C.pool("partial_scan"));
+        table.push_back(C.pool("key"),    m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value0"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value1"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.push_back(C.pool("value2"), m::Type::Get_Integer(m::Type::TY_Vector, 4));
+        table.store(C.create_store(table));
+        table.layout(C.data_layout().make(table.schema()));
 
         /* Get a handle on the backing store, create a writer, and an I/O tuple. */
-        auto &store = tbl_short.store();
+        auto &store = table.store();
         m::StoreWriter W(store);
         m::Tuple tup(W.schema());
 
@@ -115,21 +129,29 @@ void benchmark_store(const char *name)
             /* Set tuple data (i, 2*i). */
             tup.set(0, i);
             tup.set(1, i<<1);
+            tup.set(2, i<<1);
+            tup.set(3, i<<1);
             W.append(tup);
         }
 
         auto stmt = m::statement_from_string(diag, "SELECT key, value2 FROM partial_scan;");
         auto query = as<m::SelectStmt>(std::move(stmt));
 
-        std::ostringstream oss;
-        auto op = std::make_unique<m::NoOpOperator>(oss);
+        uint64_t checksum = 0;
+        auto op = std::make_unique<m::CallbackOperator>([&checksum](const m::Schema&, const m::Tuple &T) {
+                checksum += T.get(0).as_i() * 3;
+                checksum += T.get(1).as_i() * 5;
+        });
 
         using namespace std::chrono;
         auto t_read_begin = steady_clock::now();
         m::execute_query(diag, *query, std::move(op));
         auto t_read_end = steady_clock::now();
 
-        std::cout << "milestone1,partial_scan," << name << ',' << duration_cast<milliseconds>(t_read_end - t_read_begin).count() << '\n';
+        std::cout << "milestone1,partial_scan," << name << ','
+                  << duration_cast<milliseconds>(t_read_end - t_read_begin).count() << ','
+                  << std::hex << checksum << std::dec
+                  << '\n';
     }
 }
 
