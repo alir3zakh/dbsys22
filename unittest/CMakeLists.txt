@@ -2,6 +2,7 @@ set(
     UNITTEST_SOURCES
     main.cpp
     data_layouts_test.cpp
+    BTreeTest.cpp
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
