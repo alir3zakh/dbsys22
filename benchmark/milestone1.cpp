@@ -88,7 +88,7 @@ void benchmark_store(const char *name)
         }
 
         auto stmt = m::statement_from_string(diag, "SELECT key, value0, value1, value2 FROM full_scan;");
-        auto query = as<m::SelectStmt>(std::move(stmt));
+        auto query = m::as<m::ast::SelectStmt>(std::move(stmt));
 
         uint64_t checksum = 0;
         auto op = std::make_unique<m::CallbackOperator>([&checksum](const m::Schema&, const m::Tuple &T) {
@@ -135,7 +135,7 @@ void benchmark_store(const char *name)
         }
 
         auto stmt = m::statement_from_string(diag, "SELECT key, value2 FROM partial_scan;");
-        auto query = as<m::SelectStmt>(std::move(stmt));
+        auto query = m::as<m::ast::SelectStmt>(std::move(stmt));
 
         uint64_t checksum = 0;
         auto op = std::make_unique<m::CallbackOperator>([&checksum](const m::Schema&, const m::Tuple &T) {

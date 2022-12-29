@@ -58,7 +58,7 @@ int main(int argc, char **argv)
 
     /* Query the table for all package sizes. */
     auto stmt = m::statement_from_string(diag, "SELECT size, id FROM packages;");
-    std::unique_ptr<m::SelectStmt> query(static_cast<m::SelectStmt*>(stmt.release()));
+    std::unique_ptr<m::ast::SelectStmt> query(static_cast<m::ast::SelectStmt*>(stmt.release()));
 
     /* Insert all package sizes as (size,id) pairs into `size2id`. */
     auto callback = std::make_unique<m::CallbackOperator>([&](const m::Schema&, const m::Tuple &t) {

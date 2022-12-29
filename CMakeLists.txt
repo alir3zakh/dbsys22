@@ -26,13 +26,11 @@ FetchContent_Populate(
 )
 
 if(APPLE)
-    set(MUTABLE_URL "https://bigdata.uni-saarland.de/teaching/dbsys22/mutable-macos-amd64.zip")
-    set(MUTABLE_MD5 "dd26f5f0251cd19b3f31ed6486dd7062")
-    set(LIBSUFFIX   "dylib")
+    set(MUTABLE_URL "https://bigdata.uni-saarland.de/teaching/dbsys22/2022-12-12/mutable-macos-amd64.zip")
+    set(MUTABLE_MD5 "7f79ffb7b78e2535378a559121824296")
 else()
-    set(MUTABLE_URL "https://bigdata.uni-saarland.de/teaching/dbsys22/mutable-linux-amd64.zip")
-    set(MUTABLE_MD5 "2929627ce5a9a4e068486cee85c8bcb4")
-    set(LIBSUFFIX   "so")
+    set(MUTABLE_URL "https://bigdata.uni-saarland.de/teaching/dbsys22/2022-12-12/mutable-linux-amd64.zip")
+    set(MUTABLE_MD5 "be29b3d4f023fd07c3727f35419e8303")
 endif()
 ExternalProject_Add(
     Mutable
@@ -45,7 +43,6 @@ ExternalProject_Add(
     LOG_DOWNLOAD                ON
     CONFIGURE_COMMAND           ""
     BUILD_COMMAND               ""
-    BUILD_BYPRODUCTS            "${PROJECT_BINARY_DIR}/mutable/src/Mutable/include" "${PROJECT_BINARY_DIR}/mutable/src/Mutable/lib/libmutable.${LIBSUFFIX}"
     INSTALL_COMMAND             ""
 )
 include_directories(SYSTEM "${PROJECT_BINARY_DIR}/mutable/src/Mutable/include")
