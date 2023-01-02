@@ -105,9 +105,10 @@ struct BTree
             data.reserve(NUM_KEYS_PER_LEAF);
 
 
-            for (It currentIt = begin; currentIt < end; currentIt++){
-                keys.push_back((*currentIt).first);
-                data.push_back((*currentIt).second);
+            while (begin < end){
+                keys.push_back((*begin).first);
+                data.push_back((*begin).second);
+                begin++;
             }
         }
     };
@@ -233,7 +234,7 @@ struct BTree
     const_iterator const_begin_iter = const_iterator();
     const_iterator const_end_iter = const_iterator();
 
-    std::vector<Leaf> leaves;
+    std::vector<Leaf*> leaves;
 
 
     public:
@@ -251,8 +252,17 @@ struct BTree
         return tree;
     }
 
+    ~BTree() {
+        // std::cout << "Destroyed!\n";
+        for (size_t i = 0; i < leaves.size(); i++)
+        {
+            delete leaves[i];
+        }
+        
+    }
     private:
     BTree() = default;
+
     
     template<typename it>
     BTree(it begin, it end) : tree_size(end-begin)
@@ -265,7 +275,7 @@ struct BTree
 
 
         while((end - begin) > NUM_KEYS_PER_LEAF){
-            leaves.push_back(Leaf(begin, begin+NUM_KEYS_PER_LEAF));
+            leaves.push_back(new Leaf(begin, begin+NUM_KEYS_PER_LEAF));
             begin += NUM_KEYS_PER_LEAF;
         }
 
@@ -273,18 +283,18 @@ struct BTree
         std::cout << "Pair left: " << (end - begin) << std::endl;
 
         if(end - begin > 0)
-            leaves.push_back(Leaf(begin, end));
+            leaves.push_back(new Leaf(begin, end));
 
         if(leaves.size() > 0){
             std::cout << "Num Leaves: " << leaves.size() << std::endl;
-            begin_iter = iterator(&leaves[0], 0);
-            const_begin_iter = const_iterator(&leaves[0], 0);
+            begin_iter = iterator(leaves[0], 0);
+            const_begin_iter = const_iterator(leaves[0], 0);
 
 
             for (size_t i = 1; i < leaves.size(); i++)
             {
-                Leaf* prev_ptr = &leaves[i-1];
-                Leaf* current_ptr = &leaves[i];
+                Leaf* prev_ptr = leaves[i-1];
+                Leaf* current_ptr = leaves[i];
 
                 prev_ptr->next = current_ptr;
                 current_ptr->prev = prev_ptr;

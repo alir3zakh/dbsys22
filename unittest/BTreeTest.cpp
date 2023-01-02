@@ -95,7 +95,7 @@ void __test_bulkload()
         }
         CHECK(it == tree.cend());
     }
-/*
+
     SECTION("N = 1e6")
     {
         constexpr key_type N = 1e6;
@@ -118,7 +118,7 @@ void __test_bulkload()
         }
         CHECK(it == tree.cend());
     }
-*/
+
 }
 /*
 template<typename key_type, typename value_type, std::size_t node_size>
