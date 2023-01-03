@@ -94,7 +94,6 @@ struct BTree
         std::vector<Key> keys;
         std::vector<Value> data;
         Leaf* next = nullptr;
-        Leaf* prev = nullptr;
 
         
         /* TODO 1.2.3 define methods */
@@ -140,29 +139,29 @@ struct BTree
         using leaf_type = std::conditional_t<is_const, const Leaf, Leaf>;
 
         /* TODO 1.4.3 define fields */
-        Leaf* current = nullptr;
+        leaf_type* current = nullptr;
         size_t index = 0;
 
         public:
 
-        the_iterator() = default;
+        the_iterator() {};
 
-        the_iterator(Leaf * leafptr, size_t ind){
-            this->current = leafptr;
-            this->index = ind;
+        the_iterator(Leaf * leafptr, size_t ind = 0){
+            current = leafptr;
+            index = ind;
         }
 
         the_iterator(the_iterator<false> other)
         requires is_const
         {
             /* TODO 1.4.3 */
-            this->current = other->current;
-            this->index = other->index;
+            current = other.current;
+            index = other.index;
         }
 
         bool operator==(the_iterator other) const {
             /* TODO 1.4.3 */
-            return (this->current == other.current && this->index == other.index);
+            return (current == other.current && index == other.index);
         }
         bool operator!=(the_iterator other) const { return not operator==(other); }
 
@@ -180,21 +179,16 @@ struct BTree
         }
 
         the_iterator operator++(int) {
-            the_iterator copy(this->current, this->index);
+            the_iterator copy(this);
             operator++();
             return copy;
         }
 
         ref_pair<const key_type, value_type> operator*() const {
             /* TODO 1.4.3 */
-            const key_type k = current->keys[index];
-            value_type val = current->data[index];
+            const key_type key = current->keys[index];
 
-            ref_pair<const key_type, value_type> pair(k, val);
-            std::cout << pair.second() << pair.second() << std::endl;
-            
-
-            return ref_pair(k, val);
+            return ref_pair(std::move(key), current->data[index]);
         }
     };
 
@@ -254,9 +248,9 @@ struct BTree
 
     ~BTree() {
         // std::cout << "Destroyed!\n";
-        for (size_t i = 0; i < leaves.size(); i++)
+        for (auto & ptr: leaves)
         {
-            delete leaves[i];
+            delete ptr;
         }
         
     }
@@ -267,13 +261,6 @@ struct BTree
     template<typename it>
     BTree(it begin, it end) : tree_size(end-begin)
     {
-        // NUM_LEAFS = tree_size / NUM_KEYS_PER_LEAF;
-        // if(tree_size % NUM_KEYS_PER_LEAF) NUM_LEAFS++;
-        // std::ios::sync_with_stdio(false);
-
-        std::cout << "Constructor!\n";    
-
-
         while((end - begin) > NUM_KEYS_PER_LEAF){
             leaves.push_back(new Leaf(begin, begin+NUM_KEYS_PER_LEAF));
             begin += NUM_KEYS_PER_LEAF;
@@ -287,19 +274,11 @@ struct BTree
 
         if(leaves.size() > 0){
             std::cout << "Num Leaves: " << leaves.size() << std::endl;
-            begin_iter = iterator(leaves[0], 0);
-            const_begin_iter = const_iterator(leaves[0], 0);
-
+            begin_iter = iterator(leaves[0]);
+            const_begin_iter = const_iterator(leaves[0]);
 
             for (size_t i = 1; i < leaves.size(); i++)
-            {
-                Leaf* prev_ptr = leaves[i-1];
-                Leaf* current_ptr = leaves[i];
-
-                prev_ptr->next = current_ptr;
-                current_ptr->prev = prev_ptr;
-            }
-            
+                leaves[i-1]->next = leaves[i]; 
         }
     }
 

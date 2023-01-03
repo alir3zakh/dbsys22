@@ -120,7 +120,7 @@ void __test_bulkload()
     }
 
 }
-/*
+
 template<typename key_type, typename value_type, std::size_t node_size>
 void __test_find()
 {
@@ -682,7 +682,7 @@ void __test_equal_range()
         }
     }
 }
-*/
+
 }
 
 
@@ -734,47 +734,47 @@ TEST_CASE("BTree/Bulkload", "[milestone2]")
 #undef TEST
 }
 
-// TEST_CASE("BTree/find", "[milestone2]")
-// {
-// #define TEST(KEY, VALUE, NODE_SIZE) \
-//     DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
-//     { __test_find<KEY, VALUE, NODE_SIZE>(); }
+TEST_CASE("BTree/find", "[milestone2]")
+{
+#define TEST(KEY, VALUE, NODE_SIZE) \
+    DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
+    { __test_find<KEY, VALUE, NODE_SIZE>(); }
 
-//     TEST(int32_t, int32_t, 4096);
-//     TEST(int64_t, int64_t, 4096);
+    TEST(int32_t, int32_t, 4096);
+    TEST(int64_t, int64_t, 4096);
 
-//     TEST(int32_t, int32_t, 64);
-//     TEST(int64_t, int64_t, 64);
+    TEST(int32_t, int32_t, 64);
+    TEST(int64_t, int64_t, 64);
 
-// #undef TEST
-// }
+#undef TEST
+}
 
-// TEST_CASE("BTree/find_range", "[milestone2]")
-// {
-// #define TEST(KEY, VALUE, NODE_SIZE) \
-//     DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
-//     { __test_find_range<KEY, VALUE, NODE_SIZE>(); }
+TEST_CASE("BTree/find_range", "[milestone2]")
+{
+#define TEST(KEY, VALUE, NODE_SIZE) \
+    DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
+    { __test_find_range<KEY, VALUE, NODE_SIZE>(); }
 
-//     TEST(int32_t, int32_t, 4096);
-//     TEST(int64_t, int64_t, 4096);
+    TEST(int32_t, int32_t, 4096);
+    TEST(int64_t, int64_t, 4096);
 
-//     TEST(int32_t, int32_t, 64);
-//     TEST(int64_t, int64_t, 64);
+    TEST(int32_t, int32_t, 64);
+    TEST(int64_t, int64_t, 64);
 
-// #undef TEST
-// }
+#undef TEST
+}
 
-// TEST_CASE("BTree/equal_range", "[milestone2]")
-// {
-// #define TEST(KEY, VALUE, NODE_SIZE) \
-//     DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
-//     { __test_equal_range<KEY, VALUE, NODE_SIZE>(); }
+TEST_CASE("BTree/equal_range", "[milestone2]")
+{
+#define TEST(KEY, VALUE, NODE_SIZE) \
+    DYNAMIC_SECTION((#KEY " -> " #VALUE ", " #NODE_SIZE "B")) \
+    { __test_equal_range<KEY, VALUE, NODE_SIZE>(); }
 
-//     TEST(int32_t, int32_t, 4096);
-//     TEST(int64_t, int64_t, 4096);
+    TEST(int32_t, int32_t, 4096);
+    TEST(int64_t, int64_t, 4096);
 
-//     TEST(int32_t, int32_t, 64);
-//     TEST(int64_t, int64_t, 64);
+    TEST(int32_t, int32_t, 64);
+    TEST(int64_t, int64_t, 64);
 
-// #undef TEST
-// }
+#undef TEST
+}
