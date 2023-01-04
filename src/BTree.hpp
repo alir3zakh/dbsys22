@@ -53,7 +53,7 @@ struct BTree
     using key_type = Key;
     using mapped_type = Value;
     using size_type = std::size_t;
-    using pair_type = ref_pair<Key, Value>;
+    using pair_type = ref_pair<const key_type, const mapped_type>;
 
     ///> the size of BTree nodes (both `INode` and `Leaf`)
     static constexpr size_type NODE_SIZE_IN_BYTES = NodeSizeInBytes;
@@ -65,11 +65,10 @@ struct BTree
     static constexpr size_type compute_num_keys_per_leaf()
     {
         /* TODO 1.2.1 */
-        size_type pair_size = sizeof(Key) + sizeof(Value);
+        size_type pair_size = sizeof(pair_type);
         size_type useable = NodeSizeInBytes 
-                            - 2 * sizeof(nullptr) 
-                            - sizeof(std::vector<Key>)
-                            - sizeof(std::vector<Value>);
+                            - sizeof(nullptr) 
+                            - sizeof(std::vector<pair_type>);
 
         return NodeSizeInBytes / pair_size;
     };
@@ -91,24 +90,18 @@ struct BTree
     struct alignas(NODE_ALIGNMENT_IN_BYTES) Leaf
     {
         /* TODO 1.2.2 define fields */
-        std::vector<Key> keys;
-        std::vector<Value> data;
+        std::vector<pair_type> pairs;
         Leaf* next = nullptr;
 
-        
+    
         /* TODO 1.2.3 define methods */
         template<typename It>
         Leaf(It begin, It end)
         {
-            keys.reserve(NUM_KEYS_PER_LEAF);
-            data.reserve(NUM_KEYS_PER_LEAF);
-
-
-            while (begin < end){
-                keys.push_back((*begin).first);
-                data.push_back((*begin).second);
-                begin++;
-            }
+            pairs.reserve(NUM_KEYS_PER_LEAF);
+            for (auto iter = begin; iter < end; iter++)
+                pairs.push_back(ref_pair((*iter).first, (*iter).second));
+            
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -169,7 +162,7 @@ struct BTree
             /* TODO 1.4.3 */
             if(this->current != nullptr){
                 index++;
-                if(index == current->keys.size()){
+                if(index == current->pairs.size()){
                     current = current->next;
                     index = 0;
                 }
@@ -184,11 +177,12 @@ struct BTree
             return copy;
         }
 
-        ref_pair<const key_type, value_type> operator*() const {
+        ref_pair<const key_type, const value_type> operator*() const {
             /* TODO 1.4.3 */
-            const key_type key = current->keys[index];
+            // const key_type key = current->keys[index];
 
-            return ref_pair(std::move(key), current->data[index]);
+            // return ref_pair(std::move(key), current->data[index]);
+            return current->pairs[index];
         }
     };
 
@@ -249,9 +243,7 @@ struct BTree
     ~BTree() {
         // std::cout << "Destroyed!\n";
         for (auto & ptr: leaves)
-        {
             delete ptr;
-        }
         
     }
     private:
@@ -267,13 +259,11 @@ struct BTree
         }
 
         std::cout << "NUM_KEYS_PER_LEAF: " << NUM_KEYS_PER_LEAF << std::endl;
-        std::cout << "Pair left: " << (end - begin) << std::endl;
 
         if(end - begin > 0)
             leaves.push_back(new Leaf(begin, end));
 
         if(leaves.size() > 0){
-            std::cout << "Num Leaves: " << leaves.size() << std::endl;
             begin_iter = iterator(leaves[0]);
             const_begin_iter = const_iterator(leaves[0]);
 
