@@ -67,7 +67,7 @@ private:
     {
         /* TODO 1.2.1 */
         size_type pair_size = sizeof(pair_type);
-        size_type usable = NodeSizeInBytes - sizeof(nullptr) - sizeof(std::vector<pair_type>);
+        size_type usable = NodeSizeInBytes - sizeof(Leaf *) - sizeof(std::vector<pair_type>);
 
         return NodeSizeInBytes / pair_size;
     };
@@ -76,8 +76,8 @@ private:
     static constexpr size_type compute_num_keys_per_inode()
     {
         /* TODO 1.3.1 */
-        size_type pair_size = sizeof(pair_type);
-        size_type usable = NodeSizeInBytes - sizeof(void *);
+        size_type pair_size = sizeof(key_type) + sizeof(Node_Entity *);
+        size_type usable = NodeSizeInBytes;
 
         return NodeSizeInBytes / pair_size;
     };
@@ -87,10 +87,15 @@ public:
     static constexpr size_type NUM_KEYS_PER_LEAF = compute_num_keys_per_leaf();
     ///> the number of keys per `INode`
     static constexpr size_type NUM_KEYS_PER_INODE = compute_num_keys_per_inode();
-    static constexpr size_type NUM_PIVOTS_PER_INODE = NUM_KEYS_PER_INODE + 1;
+    // static constexpr size_type NUM_PIVOTS_PER_INODE = NUM_KEYS_PER_INODE + 1;
+
+    struct Node_Entity
+    {
+        virtual key_type get_pivot() { return 1e10; }
+    };
 
     /** This class implements leaves of the B+-tree. */
-    struct alignas(NODE_ALIGNMENT_IN_BYTES) Leaf
+    struct alignas(NODE_ALIGNMENT_IN_BYTES) Leaf : public Node_Entity
     {
         /* TODO 1.2.2 define fields */
         std::vector<pair_type> pairs;
@@ -105,7 +110,7 @@ public:
                 pairs.push_back(ref_pair((*iter).first, (*iter).second));
         }
 
-        key_type get_pivot()
+        key_type get_pivot() override
         {
             return pairs.back().first();
         }
@@ -113,28 +118,27 @@ public:
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
 
     /** This class implements inner nodes of the B+-tree. */
-    struct alignas(NODE_ALIGNMENT_IN_BYTES) INode
+    struct alignas(NODE_ALIGNMENT_IN_BYTES) INode : public Node_Entity
     {
         /* TODO 1.3.2 define fields */
         std::vector<key_type> keys;
-        std::vector<void *> node_ptrs;
+        std::vector<Node_Entity *> node_ptrs;
 
         /* TODO 1.3.3 define methods */
         template <typename It>
         INode(It begin, It end)
         {
             keys.reserve(NUM_KEYS_PER_INODE);
-            node_ptrs.reserve(NUM_PIVOTS_PER_INODE);
+            node_ptrs.reserve(NUM_KEYS_PER_INODE);
 
             for (auto iter = begin; iter < end; iter++)
             {
                 node_ptrs.push_back(*iter);
-                if (keys.size() < NUM_KEYS_PER_INODE)
-                    keys.push_back((*iter)->get_pivot());
+                keys.push_back((*iter)->get_pivot());
             }
         }
 
-        key_type get_pivot()
+        key_type get_pivot() override
         {
             return keys.back();
         }
@@ -247,9 +251,8 @@ private:
     const_iterator const_begin_iter = const_iterator();
     const_iterator const_end_iter = const_iterator();
 
-    std::vector<Leaf *> leaves;
-    std::vector<std::vector<INode *>> nodes;
-    void *root = nullptr;
+    std::vector<std::vector<Node_Entity *>> nodes;
+    Node_Entity *root = nullptr;
 
 public:
     /** Bulkloads the data in the range from `begin` (inclusive) to `end` (exclusive) into a fresh `BTree` and returns
@@ -269,8 +272,8 @@ public:
     ~BTree()
     {
         // std::cout << "Destroyed!\n";
-        for (auto &ptr : leaves)
-            delete ptr;
+        // for (auto &ptr : leaves)
+        // delete ptr;
     }
 
 private:
@@ -279,70 +282,56 @@ private:
     template <typename it>
     BTree(it begin, it end) : tree_size(end - begin)
     {
+        nodes.push_back(std::vector<Node_Entity *>());
         while ((end - begin) > NUM_KEYS_PER_LEAF)
         {
-            leaves.push_back(new Leaf(begin, begin + NUM_KEYS_PER_LEAF));
+            nodes.back().push_back(new Leaf(begin, begin + NUM_KEYS_PER_LEAF));
             begin += NUM_KEYS_PER_LEAF;
         }
         if (end - begin > 0)
-            leaves.push_back(new Leaf(begin, end));
+            nodes.back().push_back(new Leaf(begin, end));
 
-        if (leaves.size() > 0)
+        if (nodes.back().size() > 0)
         {
             root = build_tree();
 
             std::cout << "TREE_SIZE: " << tree_size << std::endl;
             std::cout << "NUM_KEYS_PER_LEAF: " << NUM_KEYS_PER_LEAF << std::endl;
-            std::cout << "NUM LEAVES: " << leaves.size() << std::endl;
             std::cout << "NUM_KEYS_PER_INODE " << NUM_KEYS_PER_INODE << std::endl;
 
             for (auto &level : nodes)
-                std::cout << "NUM INOES: " << level.size() << std::endl;
+                std::cout << "NUM NODES: " << level.size() << std::endl;
             std::cout << "----------------------\n";
         }
     }
 
-    void *build_tree()
+    Node_Entity *build_tree()
     {
-        begin_iter = iterator(leaves[0]);
-        const_begin_iter = const_iterator(leaves[0]);
+        std::vector<Node_Entity*>&leaves = nodes[0];
+
+        begin_iter = iterator(static_cast<Leaf *>(leaves[0]));
+        const_begin_iter = const_iterator(static_cast<Leaf *>(leaves[0]));
 
         for (size_t i = 1; i < leaves.size(); i++)
-            leaves[i - 1]->next = leaves[i];
-
-        if (leaves.size() == 1)
-            return leaves.back();
-
-        nodes.push_back(std::vector<INode *>());
-
-        auto begin = leaves.begin();
-        auto end = leaves.end();
-        while ((end - begin) > NUM_PIVOTS_PER_INODE)
         {
-            nodes.back().push_back(new INode(begin, begin + NUM_PIVOTS_PER_INODE));
-            begin += NUM_PIVOTS_PER_INODE;
-        }
-        if (end - begin > 0)
-        {
-            nodes.back().push_back(new INode(begin, end));
+            Leaf *prev_leaf = static_cast<Leaf *>(leaves[i - 1]);
+            Leaf *curr_leaf = static_cast<Leaf *>(leaves[i]);
+            prev_leaf->next = curr_leaf;
         }
 
         while (nodes.back().size() != 1)
         {
             auto begin = nodes.back().begin();
             auto end = nodes.back().end();
+            nodes.push_back(std::vector<Node_Entity *>());
 
-            nodes.push_back(std::vector<INode *>());
-
-            while ((end - begin) > NUM_PIVOTS_PER_INODE)
+            while ((end - begin) > NUM_KEYS_PER_INODE)
             {
-                nodes.back().push_back(new INode(begin, begin + NUM_PIVOTS_PER_INODE));
-                begin += NUM_PIVOTS_PER_INODE;
+                nodes.back().push_back(new INode(begin, begin + NUM_KEYS_PER_INODE));
+                begin += NUM_KEYS_PER_INODE;
             }
             if (end - begin > 0)
-            {
                 nodes.back().push_back(new INode(begin, end));
-            }
         }
 
         return nodes.back().back();
