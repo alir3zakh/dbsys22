@@ -87,12 +87,11 @@ public:
     static constexpr size_type NUM_KEYS_PER_LEAF = compute_num_keys_per_leaf();
     ///> the number of keys per `INode`
     static constexpr size_type NUM_KEYS_PER_INODE = compute_num_keys_per_inode();
-    // static constexpr size_type NUM_PIVOTS_PER_INODE = NUM_KEYS_PER_INODE + 1;
 
     struct Node_Entity
     {
         virtual key_type get_pivot() { return 1e10; }
-        virtual void *find(const key_type key) { return nullptr; }
+        virtual std::pair<void *, int> find(const key_type key) { return std::make_pair(nullptr, -1); }
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -116,16 +115,21 @@ public:
             return pairs.back().first();
         }
 
-        void *find(const key_type key) override
+        std::pair<void *, int> find(const key_type key) override
         {
             mapped_type const dummy_val = 10;
             pair_type dummy_pair = ref_pair(key, dummy_val);
             if (std::binary_search(pairs.begin(), pairs.end(), dummy_pair,
                                    [](const pair_type &a, const pair_type &b)
                                    { return a.first() < b.first(); }))
-                return this;
+            {
+                auto it = std::lower_bound(pairs.begin(), pairs.end(), dummy_pair,
+                                           [](const pair_type &a, const pair_type &b)
+                                           { return a.first() < b.first(); });
+                return std::make_pair(this, it - pairs.begin());
+            }
             else
-                return nullptr;
+                return std::make_pair(this, -1);
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -156,11 +160,11 @@ public:
             return keys.back();
         }
 
-        void *find(const key_type key) override
+        std::pair<void *, int> find(const key_type key) override
         {
             auto it = std::lower_bound(keys.begin(), keys.end(), key);
             if (it == keys.end())
-                return nullptr;
+                return node_ptrs.back()->find(key);
             return node_ptrs[it - keys.begin()]->find(key);
         }
     };
@@ -306,21 +310,18 @@ private:
             nodes.back().push_back(new Leaf(begin, end));
 
         if (nodes.back().size() > 0)
-        {
             root = build_tree();
-
-            std::cout << "TREE_SIZE: " << tree_size << std::endl;
-            std::cout << "NUM_KEYS_PER_LEAF: " << NUM_KEYS_PER_LEAF << std::endl;
-            std::cout << "NUM_KEYS_PER_INODE " << NUM_KEYS_PER_INODE << std::endl;
-
-            for (auto &level : nodes)
-                std::cout << "NUM NODES: " << level.size() << std::endl;
-            std::cout << "----------------------\n";
-        }
     }
 
     Node_Entity *build_tree()
     {
+        // std::cout << "TREE_SIZE: " << tree_size << std::endl;
+        // std::cout << "NUM_KEYS_PER_LEAF: " << NUM_KEYS_PER_LEAF << std::endl;
+        // std::cout << "NUM_KEYS_PER_INODE " << NUM_KEYS_PER_INODE << std::endl;
+
+        // for (auto &level : nodes)
+        //     std::cout << "NUM NODES: " << level.size() << std::endl;
+        // std::cout << "----------------------\n";
         std::vector<Node_Entity *> &leaves = nodes[0];
 
         begin_iter = iterator(static_cast<Leaf *>(leaves[0]));
@@ -401,16 +402,13 @@ public:
         if (root == nullptr)
             return end();
 
-        Leaf *leaf_ptr = (Leaf *)root->find(key);
-        if (leaf_ptr == nullptr)
+        auto result = root->find(key);
+        Leaf *leaf_ptr = (Leaf *)result.first;
+        int index = result.second;
+        if (index == -1)
             return end();
 
-        mapped_type const dummy_val = -10;
-        pair_type dummy_pair = ref_pair(key, dummy_val);
-        auto it = std::lower_bound(leaf_ptr->pairs.begin(), leaf_ptr->pairs.end(), dummy_pair,
-                               [](const pair_type &a, const pair_type &b)
-                               { return a.first() < b.first(); });
-        return iterator(leaf_ptr, it - leaf_ptr->pairs.begin());
+        return iterator(leaf_ptr, index);
     }
 
     /** Returns a `const_range` of all elements with key in the interval `[lo, hi)`, i.e. `lo` including and `hi`
