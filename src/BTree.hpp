@@ -92,6 +92,7 @@ public:
     struct Node_Entity
     {
         virtual key_type get_pivot() { return 1e10; }
+        virtual void *find(const key_type key) { return nullptr; }
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -113,6 +114,18 @@ public:
         key_type get_pivot() override
         {
             return pairs.back().first();
+        }
+
+        void *find(const key_type key) override
+        {
+            mapped_type const dummy_val = 10;
+            pair_type dummy_pair = ref_pair(key, dummy_val);
+            if (std::binary_search(pairs.begin(), pairs.end(), dummy_pair,
+                                   [](const pair_type &a, const pair_type &b)
+                                   { return a.first() < b.first(); }))
+                return this;
+            else
+                return nullptr;
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -141,6 +154,14 @@ public:
         key_type get_pivot() override
         {
             return keys.back();
+        }
+
+        void *find(const key_type key) override
+        {
+            auto it = std::lower_bound(keys.begin(), keys.end(), key);
+            if (it == keys.end())
+                return nullptr;
+            return node_ptrs[it - keys.begin()]->find(key);
         }
     };
     static_assert(sizeof(INode) <= NODE_SIZE_IN_BYTES, "INode exceeds its size limit");
@@ -269,13 +290,6 @@ public:
         return tree;
     }
 
-    ~BTree()
-    {
-        // std::cout << "Destroyed!\n";
-        // for (auto &ptr : leaves)
-        // delete ptr;
-    }
-
 private:
     BTree() = default;
 
@@ -307,7 +321,7 @@ private:
 
     Node_Entity *build_tree()
     {
-        std::vector<Node_Entity*>&leaves = nodes[0];
+        std::vector<Node_Entity *> &leaves = nodes[0];
 
         begin_iter = iterator(static_cast<Leaf *>(leaves[0]));
         const_begin_iter = const_iterator(static_cast<Leaf *>(leaves[0]));
@@ -341,12 +355,12 @@ public:
     ///> returns the size of the tree, i.e. the number of key-value pairs
     size_type size() const
     { /* TODO 1.4.2 */
-        return this->tree_size;
+        return tree_size;
     }
     ///> returns the number if inner/non-leaf levels, a.k.a. the height
     size_type height() const
     { /* TODO 1.4.2 */
-        return this->tree_height;
+        return tree_height;
     }
 
     /** Returns an `iterator` to the smallest key-value pair of the tree, if any, and `end()` otherwise. */
@@ -384,7 +398,19 @@ public:
     iterator find(const key_type &key)
     {
         /* TODO 1.4.5 */
-        M_unreachable("not implemented");
+        if (root == nullptr)
+            return end();
+
+        Leaf *leaf_ptr = (Leaf *)root->find(key);
+        if (leaf_ptr == nullptr)
+            return end();
+
+        mapped_type const dummy_val = -10;
+        pair_type dummy_pair = ref_pair(key, dummy_val);
+        auto it = std::lower_bound(leaf_ptr->pairs.begin(), leaf_ptr->pairs.end(), dummy_pair,
+                               [](const pair_type &a, const pair_type &b)
+                               { return a.first() < b.first(); });
+        return iterator(leaf_ptr, it - leaf_ptr->pairs.begin());
     }
 
     /** Returns a `const_range` of all elements with key in the interval `[lo, hi)`, i.e. `lo` including and `hi`
@@ -396,7 +422,8 @@ public:
     }
     /** Returns a `range` of all elements with key in the interval `[lo, hi)`, i.e. `lo` including and `hi` excluding.
      * */
-    range find_range(const key_type &lo, const key_type &hi)
+    range
+    find_range(const key_type &lo, const key_type &hi)
     {
         /* TODO 1.4.6 */
         M_unreachable("not implemented");
