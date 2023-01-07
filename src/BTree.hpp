@@ -92,6 +92,7 @@ public:
     {
         virtual key_type get_pivot() { return 1e10; }
         virtual std::pair<void *, int> find(const key_type key) { return std::make_pair(nullptr, -1); }
+        virtual std::pair<void *, int> lower_bound(const key_type key) { return std::make_pair(nullptr, -1); }
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -128,8 +129,22 @@ public:
                                            { return a.first() < b.first(); });
                 return std::make_pair(this, it - pairs.begin());
             }
-            else
+
+            return std::make_pair(this, -1);
+        }
+
+        std::pair<void *, int> lower_bound(const key_type key) override
+        {
+            mapped_type const dummy_val = 10;
+            pair_type dummy_pair = ref_pair(key, dummy_val);
+            auto it = std::lower_bound(pairs.begin(), pairs.end(), dummy_pair,
+                                       [](const pair_type &a, const pair_type &b)
+                                       { return a.first() < b.first(); });
+
+            if (it == pairs.end())
                 return std::make_pair(this, -1);
+
+            return std::make_pair(this, it - pairs.begin());
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -164,9 +179,11 @@ public:
         {
             auto it = std::lower_bound(keys.begin(), keys.end(), key);
             if (it == keys.end())
-                return node_ptrs.back()->find(key);
+                return std::make_pair(nullptr, -1);
             return node_ptrs[it - keys.begin()]->find(key);
         }
+
+        std::pair<void *, int> lower_bound(const key_type key) override { return find(key); }
     };
     static_assert(sizeof(INode) <= NODE_SIZE_IN_BYTES, "INode exceeds its size limit");
 
@@ -424,7 +441,29 @@ public:
     find_range(const key_type &lo, const key_type &hi)
     {
         /* TODO 1.4.6 */
-        M_unreachable("not implemented");
+        if (root == nullptr)
+            return range(end(), end());
+
+        auto lo_result = root->lower_bound(lo);
+        auto hi_result = root->lower_bound(hi);
+
+        Leaf *lo_leaf = (Leaf *)lo_result.first;
+        int lo_leaf_index = lo_result.second;
+
+        Leaf *hi_leaf = (Leaf *)hi_result.first;
+        int hi_leaf_index = hi_result.second;
+
+
+        iterator lo_iter(lo_leaf, lo_leaf_index);
+        iterator hi_iter(hi_leaf, hi_leaf_index);
+
+        if (lo_leaf_index == -1)
+            return range(end(), end());
+
+        if (hi_leaf_index == -1)
+            return range(lo_iter, end());
+
+        return range(lo_iter, hi_iter);
     }
 
     /** Returns a `const_range` of all elements with key equals to \p key. */
