@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <vector>
 
-/** Require that \tparam T is an *orderable* type, i.e. that two instances of \tparam T can be compared less than and
+/** Require that \tparam T is an *orderable* type, i.e. that two instances of \tparam T can be compare_key_paird less than and
  * equals. */
 template <typename T>
 concept orderable = requires(T a, T b) {
@@ -88,11 +88,17 @@ public:
     ///> the number of keys per `INode`
     static constexpr size_type NUM_KEYS_PER_INODE = compute_num_keys_per_inode();
 
+    struct compare_key_pair
+    {
+        bool operator()(const pair_type &a, const key_type &b) { return a.first() < b; };
+        bool operator()(const key_type &a, const pair_type &b) { return a < b.first(); };
+    };
+
     struct Node_Entity
     {
         virtual key_type get_pivot() { return 1e10; }
-        virtual std::pair<void *, int> find(const key_type key) { return std::make_pair(nullptr, -1); }
-        virtual std::pair<void *, int> lower_bound(const key_type key) { return std::make_pair(nullptr, -1); }
+        virtual std::pair<void *, int> find(const key_type &key) { return std::make_pair(nullptr, -1); }
+        virtual std::pair<void *, int> lower_bound(const key_type &key) { return std::make_pair(nullptr, -1); }
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -111,35 +117,22 @@ public:
                 pairs.push_back(ref_pair((*iter).first, (*iter).second));
         }
 
-        key_type get_pivot() override
-        {
-            return pairs.back().first();
-        }
+        key_type get_pivot() override { return pairs.back().first(); }
 
-        std::pair<void *, int> find(const key_type key) override
+        std::pair<void *, int> find(const key_type &key) override
         {
-            mapped_type const dummy_val = 10;
-            pair_type dummy_pair = ref_pair(key, dummy_val);
-            if (std::binary_search(pairs.begin(), pairs.end(), dummy_pair,
-                                   [](const pair_type &a, const pair_type &b)
-                                   { return a.first() < b.first(); }))
+            if (std::binary_search(pairs.begin(), pairs.end(), key, compare_key_pair()))
             {
-                auto it = std::lower_bound(pairs.begin(), pairs.end(), dummy_pair,
-                                           [](const pair_type &a, const pair_type &b)
-                                           { return a.first() < b.first(); });
+                auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
                 return std::make_pair(this, it - pairs.begin());
             }
 
             return std::make_pair(this, -1);
         }
 
-        std::pair<void *, int> lower_bound(const key_type key) override
+        std::pair<void *, int> lower_bound(const key_type &key) override
         {
-            mapped_type const dummy_val = 10;
-            pair_type dummy_pair = ref_pair(key, dummy_val);
-            auto it = std::lower_bound(pairs.begin(), pairs.end(), dummy_pair,
-                                       [](const pair_type &a, const pair_type &b)
-                                       { return a.first() < b.first(); });
+            auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
 
             if (it == pairs.end())
                 return std::make_pair(this, -1);
@@ -170,12 +163,9 @@ public:
             }
         }
 
-        key_type get_pivot() override
-        {
-            return keys.back();
-        }
+        key_type get_pivot() override { return keys.back(); }
 
-        std::pair<void *, int> find(const key_type key) override
+        std::pair<void *, int> find(const key_type &key) override
         {
             auto it = std::lower_bound(keys.begin(), keys.end(), key);
             if (it == keys.end())
@@ -183,7 +173,7 @@ public:
             return node_ptrs[it - keys.begin()]->find(key);
         }
 
-        std::pair<void *, int> lower_bound(const key_type key) override { return find(key); }
+        std::pair<void *, int> lower_bound(const key_type &key) override { return find(key); }
     };
     static_assert(sizeof(INode) <= NODE_SIZE_IN_BYTES, "INode exceeds its size limit");
 
@@ -452,7 +442,6 @@ public:
 
         Leaf *hi_leaf = (Leaf *)hi_result.first;
         int hi_leaf_index = hi_result.second;
-
 
         iterator lo_iter(lo_leaf, lo_leaf_index);
         iterator hi_iter(hi_leaf, hi_leaf_index);
