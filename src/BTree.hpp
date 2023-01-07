@@ -99,6 +99,7 @@ public:
         virtual key_type get_pivot() = 0;
         virtual void find(const key_type &key) = 0;
         virtual void lower_bound(const key_type &key) = 0;
+        virtual void upper_bound(const key_type &key) = 0;
         virtual ~Node_Entity() = default;
     };
 
@@ -143,6 +144,17 @@ public:
             else
                 tree->lower_bound_iter = iterator(this, it - pairs.begin());
         }
+
+        void upper_bound(const key_type &key) override
+        {
+            auto it = std::upper_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
+
+            if (it == pairs.end())
+                tree->upper_bound_iter = iterator(this, -1);
+
+            else
+                tree->upper_bound_iter = iterator(this, it - pairs.begin());
+        }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
 
@@ -186,6 +198,15 @@ public:
                 tree->lower_bound_iter = iterator(nullptr, -1);
             else
                 node_ptrs[it - keys.begin()]->lower_bound(key);
+        }
+
+        void upper_bound(const key_type &key) override
+        {
+            auto it = std::upper_bound(keys.begin(), keys.end(), key);
+            if (it == keys.end())
+                tree->upper_bound_iter = iterator(nullptr, -1);
+            else
+                node_ptrs[it - keys.begin()]->upper_bound(key);
         }
     };
     static_assert(sizeof(INode) <= NODE_SIZE_IN_BYTES, "INode exceeds its size limit");
@@ -416,7 +437,6 @@ public:
     range find_range(const key_type &lo, const key_type &hi)
     {
         /* TODO 1.4.6 */
-        // M_unreachable("not implemented");
         if (root == nullptr)
             return range(end(), end());
 
@@ -445,6 +465,18 @@ public:
     range equal_range(const key_type &key)
     {
         /* TODO 1.4.7 */
-        M_unreachable("not implemented");
+        if (root == nullptr)
+            return range(end(), end());
+
+        root->lower_bound(key);
+        root->upper_bound(key);
+
+        if (lower_bound_iter.index == -1)
+            return range(end(), end());
+
+        if (upper_bound_iter.index == -1)
+            return range(lower_bound_iter, end());
+
+        return range(lower_bound_iter, upper_bound_iter);
     }
 };
