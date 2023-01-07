@@ -82,23 +82,23 @@ private:
         return NodeSizeInBytes / pair_size;
     };
 
-public:
-    ///> the number of key-value pairs per `Leaf`
-    static constexpr size_type NUM_KEYS_PER_LEAF = compute_num_keys_per_leaf();
-    ///> the number of keys per `INode`
-    static constexpr size_type NUM_KEYS_PER_INODE = compute_num_keys_per_inode();
-
     struct compare_key_pair
     {
         bool operator()(const pair_type &a, const key_type &b) { return a.first() < b; };
         bool operator()(const key_type &a, const pair_type &b) { return a < b.first(); };
     };
 
+public:
+    ///> the number of key-value pairs per `Leaf`
+    static constexpr size_type NUM_KEYS_PER_LEAF = compute_num_keys_per_leaf();
+    ///> the number of keys per `INode`
+    static constexpr size_type NUM_KEYS_PER_INODE = compute_num_keys_per_inode();
+
     struct Node_Entity
     {
         virtual key_type get_pivot() { return 1e10; }
-        virtual std::pair<void *, int> find(const key_type &key) { return std::make_pair(nullptr, -1); }
-        virtual std::pair<void *, int> lower_bound(const key_type &key) { return std::make_pair(nullptr, -1); }
+        virtual void find(const key_type &key) = 0;
+        virtual void lower_bound(const key_type &key) = 0;
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -107,10 +107,11 @@ public:
         /* TODO 1.2.2 define fields */
         std::vector<pair_type> pairs;
         Leaf *next = nullptr;
+        BTree *tree;
 
         /* TODO 1.2.3 define methods */
         template <typename It>
-        Leaf(It begin, It end)
+        Leaf(It begin, It end, BTree *Tree) : tree(Tree)
         {
             pairs.reserve(NUM_KEYS_PER_LEAF);
             for (auto iter = begin; iter != end; iter++)
@@ -119,25 +120,27 @@ public:
 
         key_type get_pivot() override { return pairs.back().first(); }
 
-        std::pair<void *, int> find(const key_type &key) override
+        void find(const key_type &key) override
         {
             if (std::binary_search(pairs.begin(), pairs.end(), key, compare_key_pair()))
             {
                 auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
-                return std::make_pair(this, it - pairs.begin());
+                tree->find_iter = iterator(this, it - pairs.begin());
+                return;
             }
 
-            return std::make_pair(this, -1);
+            tree->find_iter = iterator(this, -1);
         }
 
-        std::pair<void *, int> lower_bound(const key_type &key) override
+        void lower_bound(const key_type &key) override
         {
             auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
 
             if (it == pairs.end())
-                return std::make_pair(this, -1);
+                tree->lower_bound_iter = iterator(this, -1);
 
-            return std::make_pair(this, it - pairs.begin());
+            else
+                tree->lower_bound_iter = iterator(this, it - pairs.begin());
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -148,10 +151,11 @@ public:
         /* TODO 1.3.2 define fields */
         std::vector<key_type> keys;
         std::vector<Node_Entity *> node_ptrs;
+        BTree *tree;
 
         /* TODO 1.3.3 define methods */
         template <typename It>
-        INode(It begin, It end)
+        INode(It begin, It end, BTree *Tree) : tree(Tree)
         {
             keys.reserve(NUM_KEYS_PER_INODE);
             node_ptrs.reserve(NUM_KEYS_PER_INODE);
@@ -165,15 +169,23 @@ public:
 
         key_type get_pivot() override { return keys.back(); }
 
-        std::pair<void *, int> find(const key_type &key) override
+        void find(const key_type &key) override
         {
             auto it = std::lower_bound(keys.begin(), keys.end(), key);
             if (it == keys.end())
-                return std::make_pair(nullptr, -1);
-            return node_ptrs[it - keys.begin()]->find(key);
+                tree->find_iter = iterator(nullptr, -1);
+            else
+                node_ptrs[it - keys.begin()]->find(key);
         }
 
-        std::pair<void *, int> lower_bound(const key_type &key) override { return find(key); }
+        void lower_bound(const key_type &key) override
+        {
+            auto it = std::lower_bound(keys.begin(), keys.end(), key);
+            if (it == keys.end())
+                tree->lower_bound_iter = iterator(nullptr, -1);
+            else
+                node_ptrs[it - keys.begin()]->lower_bound(key);
+        }
     };
     static_assert(sizeof(INode) <= NODE_SIZE_IN_BYTES, "INode exceeds its size limit");
 
@@ -191,12 +203,12 @@ private:
 
         /* TODO 1.4.3 define fields */
         leaf_type *current = nullptr;
-        size_t index = 0;
+        int index = 0;
 
     public:
         the_iterator(){};
 
-        the_iterator(Leaf *leafptr, size_t ind = 0)
+        the_iterator(Leaf *leafptr, int ind = 0)
         {
             current = leafptr;
             index = ind;
@@ -279,6 +291,9 @@ private:
 
     iterator begin_iter = iterator();
     iterator end_iter = iterator();
+    iterator find_iter = iterator();
+    iterator lower_bound_iter = iterator();
+    iterator upper_bound_iter = iterator();
 
     const_iterator const_begin_iter = const_iterator();
     const_iterator const_end_iter = const_iterator();
@@ -310,11 +325,11 @@ private:
         nodes.push_back(std::vector<Node_Entity *>());
         while ((end - begin) > NUM_KEYS_PER_LEAF)
         {
-            nodes.back().push_back(new Leaf(begin, begin + NUM_KEYS_PER_LEAF));
+            nodes.back().push_back(new Leaf(begin, begin + NUM_KEYS_PER_LEAF, this));
             begin += NUM_KEYS_PER_LEAF;
         }
         if (end - begin > 0)
-            nodes.back().push_back(new Leaf(begin, end));
+            nodes.back().push_back(new Leaf(begin, end, this));
 
         if (nodes.back().size() > 0)
             root = build_tree();
@@ -349,11 +364,11 @@ private:
 
             while ((end - begin) > NUM_KEYS_PER_INODE)
             {
-                nodes.back().push_back(new INode(begin, begin + NUM_KEYS_PER_INODE));
+                nodes.back().push_back(new INode(begin, begin + NUM_KEYS_PER_INODE, this));
                 begin += NUM_KEYS_PER_INODE;
             }
             if (end - begin > 0)
-                nodes.back().push_back(new INode(begin, end));
+                nodes.back().push_back(new INode(begin, end, this));
         }
 
         return nodes.back().back();
@@ -361,36 +376,18 @@ private:
 
 public:
     ///> returns the size of the tree, i.e. the number of key-value pairs
-    size_type size() const
-    { /* TODO 1.4.2 */
-        return tree_size;
-    }
+    size_type size() const { return tree_size; }
     ///> returns the number if inner/non-leaf levels, a.k.a. the height
-    size_type height() const
-    { /* TODO 1.4.2 */
-        return tree_height;
-    }
+    size_type height() const { return tree_height; }
 
     /** Returns an `iterator` to the smallest key-value pair of the tree, if any, and `end()` otherwise. */
-    iterator begin()
-    { /* TODO 1.4.3 */
-        return begin_iter;
-    }
+    iterator begin() { return begin_iter; }
     /** Returns the past-the-end `iterator`. */
-    iterator end()
-    { /* TODO 1.4.3 */
-        return end_iter;
-    }
+    iterator end() { return end_iter; }
     /** Returns an `const_iterator` to the smallest key-value pair of the tree, if any, and `end()` otherwise. */
-    const_iterator begin() const
-    { /* TODO 1.4.3 */
-        return const_begin_iter;
-    }
+    const_iterator begin() const { return const_begin_iter; }
     /** Returns the past-the-end `iterator`. */
-    const_iterator end() const
-    { /* TODO 1.4.3 */
-        return const_end_iter;
-    }
+    const_iterator end() const { return const_end_iter; }
     /** Returns an `const_iterator` to the smallest key-value pair of the tree, if any, and `end()` otherwise. */
     const_iterator cbegin() const { return begin(); }
     /** Returns the past-the-end `iterator`. */
@@ -409,13 +406,11 @@ public:
         if (root == nullptr)
             return end();
 
-        auto result = root->find(key);
-        Leaf *leaf_ptr = (Leaf *)result.first;
-        int index = result.second;
-        if (index == -1)
+        root->find(key);
+        if (find_iter.index == -1)
             return end();
 
-        return iterator(leaf_ptr, index);
+        return find_iter;
     }
 
     /** Returns a `const_range` of all elements with key in the interval `[lo, hi)`, i.e. `lo` including and `hi`
@@ -427,29 +422,23 @@ public:
     }
     /** Returns a `range` of all elements with key in the interval `[lo, hi)`, i.e. `lo` including and `hi` excluding.
      * */
-    range
-    find_range(const key_type &lo, const key_type &hi)
+    range find_range(const key_type &lo, const key_type &hi)
     {
         /* TODO 1.4.6 */
+        // M_unreachable("not implemented");
         if (root == nullptr)
             return range(end(), end());
 
-        auto lo_result = root->lower_bound(lo);
-        auto hi_result = root->lower_bound(hi);
+        root->lower_bound(lo);
+        auto lo_iter = lower_bound_iter;
 
-        Leaf *lo_leaf = (Leaf *)lo_result.first;
-        int lo_leaf_index = lo_result.second;
+        root->lower_bound(hi);
+        auto hi_iter = lower_bound_iter;
 
-        Leaf *hi_leaf = (Leaf *)hi_result.first;
-        int hi_leaf_index = hi_result.second;
-
-        iterator lo_iter(lo_leaf, lo_leaf_index);
-        iterator hi_iter(hi_leaf, hi_leaf_index);
-
-        if (lo_leaf_index == -1)
+        if (lo_iter.index == -1)
             return range(end(), end());
 
-        if (hi_leaf_index == -1)
+        if (hi_iter.index == -1)
             return range(lo_iter, end());
 
         return range(lo_iter, hi_iter);

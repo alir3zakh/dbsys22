@@ -717,8 +717,6 @@ TEST_CASE("BTree/node size", "[milestone2]")
 #undef TEST
 }
 
-
-
 TEST_CASE("BTree/Bulkload", "[milestone2]")
 {
 #define TEST(KEY, VALUE, NODE_SIZE) \
