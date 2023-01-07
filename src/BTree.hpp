@@ -96,9 +96,10 @@ public:
 
     struct Node_Entity
     {
-        virtual key_type get_pivot() { return 1e10; }
+        virtual key_type get_pivot() = 0;
         virtual void find(const key_type &key) = 0;
         virtual void lower_bound(const key_type &key) = 0;
+        virtual ~Node_Entity() = default;
     };
 
     /** This class implements leaves of the B+-tree. */
@@ -111,7 +112,7 @@ public:
 
         /* TODO 1.2.3 define methods */
         template <typename It>
-        Leaf(It begin, It end, BTree *Tree) : tree(Tree)
+        Leaf(const It &begin, const It &end, BTree *Tree) : tree(Tree)
         {
             pairs.reserve(NUM_KEYS_PER_LEAF);
             for (auto iter = begin; iter != end; iter++)
@@ -155,7 +156,7 @@ public:
 
         /* TODO 1.3.3 define methods */
         template <typename It>
-        INode(It begin, It end, BTree *Tree) : tree(Tree)
+        INode(const It &begin, const It &end, BTree *Tree) : tree(Tree)
         {
             keys.reserve(NUM_KEYS_PER_INODE);
             node_ptrs.reserve(NUM_KEYS_PER_INODE);
@@ -208,19 +209,9 @@ private:
     public:
         the_iterator(){};
 
-        the_iterator(Leaf *leafptr, int ind = 0)
-        {
-            current = leafptr;
-            index = ind;
-        }
+        the_iterator(Leaf *leafptr, int ind = 0) : current(leafptr), index(ind) {}
 
-        the_iterator(the_iterator<false> other)
-            requires is_const
-        {
-            /* TODO 1.4.3 */
-            current = other.current;
-            index = other.index;
-        }
+        the_iterator(the_iterator<false> other) : current(other.current), index(other.index) {}
 
         bool operator==(the_iterator other) const
         {
@@ -298,8 +289,8 @@ private:
     const_iterator const_begin_iter = const_iterator();
     const_iterator const_end_iter = const_iterator();
 
-    std::vector<std::vector<Node_Entity *>> nodes;
     Node_Entity *root = nullptr;
+    std::vector<std::vector<Node_Entity *>> nodes;
 
 public:
     /** Bulkloads the data in the range from `begin` (inclusive) to `end` (exclusive) into a fresh `BTree` and returns
@@ -314,6 +305,13 @@ public:
         /* TODO 1.4.4 */
         BTree<Key, Value, NodeSizeInBytes> tree(begin, end);
         return tree;
+    }
+
+    ~BTree()
+    {
+        for (auto &level : nodes)
+            for (auto &node : level)
+                delete node;
     }
 
 private:
@@ -337,13 +335,6 @@ private:
 
     Node_Entity *build_tree()
     {
-        // std::cout << "TREE_SIZE: " << tree_size << std::endl;
-        // std::cout << "NUM_KEYS_PER_LEAF: " << NUM_KEYS_PER_LEAF << std::endl;
-        // std::cout << "NUM_KEYS_PER_INODE " << NUM_KEYS_PER_INODE << std::endl;
-
-        // for (auto &level : nodes)
-        //     std::cout << "NUM NODES: " << level.size() << std::endl;
-        // std::cout << "----------------------\n";
         std::vector<Node_Entity *> &leaves = nodes[0];
 
         begin_iter = iterator(static_cast<Leaf *>(leaves[0]));
