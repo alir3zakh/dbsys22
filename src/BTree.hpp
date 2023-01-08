@@ -69,7 +69,7 @@ private:
         size_type pair_size = sizeof(pair_type);
         size_type usable = NodeSizeInBytes - sizeof(Leaf *) - sizeof(std::vector<pair_type>);
 
-        return NodeSizeInBytes / pair_size;
+        return NodeSizeInBytes;
     };
 
     /** Computes the number of keys per `INode`, considering the specified `NodeSizeInBytes`. */
@@ -79,7 +79,7 @@ private:
         size_type pair_size = sizeof(key_type) + sizeof(Node_Entity *);
         size_type usable = NodeSizeInBytes;
 
-        return NodeSizeInBytes / pair_size;
+        return NodeSizeInBytes;
     };
 
     struct compare_key_pair
@@ -409,7 +409,14 @@ public:
     const_iterator find(const key_type &key) const
     {
         /* TODO 1.4.5 */
-        M_unreachable("not implemented");
+        if (root == nullptr)
+            return end();
+
+        root->find(key);
+        if (find_iter.index == -1)
+            return end();
+
+        return find_iter;
     }
     /** Returns an `iterator` to the first element with the given \p key, if any, and `end()` otherwise. */
     iterator find(const key_type &key)
