@@ -3,6 +3,7 @@ set(
     main.cpp
     data_layouts_test.cpp
     BTreeTest.cpp
+    MyPlanEnumeratorTest.cpp
 )
 
 if (CMAKE_BUILD_TYPE MATCHES Debug)
