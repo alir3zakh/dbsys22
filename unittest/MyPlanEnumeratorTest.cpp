@@ -2,6 +2,7 @@
 
 #include "milestone3_utils.hpp"
 #include "MyPlanEnumerator.hpp"
+#include "nullstream.hpp"
 #include <initializer_list>
 #include <memory>
 #include <sstream>
@@ -24,20 +25,6 @@ struct PT_entry
     std::size_t size;
     PlanTable::Subproblem S1;
     PlanTable::Subproblem S2;
-};
-
-class NullBuffer : public std::streambuf
-{
-    public:
-    int overflow(int c) { return c; }
-};
-
-class NullStream : public std::ostream
-{
-    public:
-    NullStream() : std::ostream(&m_sb) {}
-    private:
-    NullBuffer m_sb;
 };
 
 struct CardinalityWriter
@@ -192,7 +179,7 @@ CREATE TABLE T (\n\
             expected_cost = 11;
         }
 
-        SECTION("T0 ⋈  (T1 ⋈  T2)")
+        SECTION("(T0 ⋈  T1) ⋈  T2")
         {
             write_cardinalities(cardinalities, "test", {
                 { { "T0" }, 5 },
@@ -292,19 +279,19 @@ CREATE TABLE T (\n\
                 { { "T0", "T1" }, 91 },
                 { { "T0", "T2" }, 2 },
                 { { "T0", "T3" }, 222 },
-                { { "T0", "T4" }, 2 },
+                { { "T0", "T4" }, 8 },
 
                 { { "T0", "T1", "T2" }, 3 },
                 { { "T0", "T1", "T3" }, 15 },
                 { { "T0", "T1", "T4" }, 4 },
-                { { "T0", "T2", "T3" }, 2 },
+                { { "T0", "T2", "T3" }, 27 },
                 { { "T0", "T2", "T4" }, 2 },
                 { { "T0", "T3", "T4" }, 39 },
 
                 { { "T0", "T1", "T2", "T3" }, 11 },
                 { { "T0", "T1", "T2", "T4" }, 3 },
                 { { "T0", "T1", "T3", "T4" }, 56 },
-                { { "T0", "T2", "T3", "T4" }, 3 },
+                { { "T0", "T2", "T3", "T4" }, 4 },
 
                 { { "T0", "T1", "T2", "T3", "T4" }, 46 },
             });
@@ -322,7 +309,6 @@ CREATE TABLE T (\n\
 
             expected_cost = 53;
         }
-
 
         SECTION("(((T0 ⋈  T4) ⋈  T1) ⋈  T3) ⋈  T2")
         {
@@ -365,6 +351,55 @@ CREATE TABLE T (\n\
             expected.emplace_back(PT_entry { .S = T0|T1|T2|T3|T4, .size = 2, .S1 = T0|T1|T3|T4, .S2 = T2 });
 
             expected_cost = 9;
+        }
+    }
+
+    SECTION("clique-4")
+    {
+        query_str = "\
+                     SELECT 1\n\
+                     FROM T AS T0, T AS T1, T AS T2, T AS T3\n\
+                     WHERE T0.fid_T1 = T1.id\n\
+                       AND T0.fid_T2 = T2.id\n\
+                       AND T0.fid_T3 = T3.id\n\
+                       AND T1.fid_T2 = T2.id\n\
+                       AND T1.fid_T3 = T3.id\n\
+                       AND T2.fid_T3 = T3.id\n\
+                     ;";
+
+        SECTION("(T1 ⋈  T2) ⋈  (T0 ⋈  T3)")
+        {
+            write_cardinalities(cardinalities, "test", {
+                { { "T0" }, 70 },
+                { { "T1" }, 46 },
+                { { "T2" }, 58 },
+                { { "T3" }, 52 },
+
+                { { "T0", "T1" }, 123 },
+                { { "T0", "T2" }, 3572 },
+                { { "T0", "T3" }, 1521 },
+                { { "T1", "T2" }, 1060 },
+                { { "T1", "T3" }, 1133 },
+                { { "T2", "T3" }, 2663 },
+
+                { { "T0", "T1", "T2" }, 3897 },
+                { { "T0", "T1", "T3" }, 6389 },
+                { { "T0", "T2", "T3" }, 5677 },
+                { { "T1", "T2", "T3" }, 8909 },
+
+                { { "T0", "T1", "T2", "T3" }, 991 },
+            });
+
+            expected.emplace_back(PT_entry { .S = T0, .size = 70, .S1 = None, .S2 = None });
+            expected.emplace_back(PT_entry { .S = T1, .size = 46, .S1 = None, .S2 = None });
+            expected.emplace_back(PT_entry { .S = T2, .size = 58, .S1 = None, .S2 = None });
+            expected.emplace_back(PT_entry { .S = T3, .size = 52, .S1 = None, .S2 = None });
+
+            expected.emplace_back(PT_entry { .S = T1|T2, .size = 1060, .S1 = T1, .S2 = T2 });
+            expected.emplace_back(PT_entry { .S = T0|T3, .size = 1521, .S1 = T0, .S2 = T3 });
+            expected.emplace_back(PT_entry { .S = T0|T1|T2|T3, .size = 991, .S1 = T0|T3, .S2 = T1|T2 });
+
+            expected_cost = 991 + 1060 + 1521;
         }
     }
 
