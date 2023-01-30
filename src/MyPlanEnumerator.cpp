@@ -4,7 +4,7 @@
 using namespace m;
 using pair_type = std::pair<SmallBitset, SmallBitset>;
 
-void get_subsets(SmallBitset &superSet, SmallBitset &Left, size_t ind, size_t len,
+void get_subsets(const SmallBitset &superSet, SmallBitset &Left, size_t ind, const size_t &len,
                  std::vector<pair_type> &V, const AdjacencyMatrix &M)
 {
     if (ind == len - 1)
@@ -19,10 +19,7 @@ void get_subsets(SmallBitset &superSet, SmallBitset &Left, size_t ind, size_t le
     }
 
     if (superSet[ind] == 0)
-    {
-        get_subsets(superSet, Left, ind + 1, len, V, M);
-        return;
-    }
+        return get_subsets(superSet, Left, ind + 1, len, V, M);
 
     get_subsets(superSet, Left, ind + 1, len, V, M);
     Left[ind] = 1;
@@ -31,9 +28,9 @@ void get_subsets(SmallBitset &superSet, SmallBitset &Left, size_t ind, size_t le
 }
 
 template <typename PlanTable>
-void fill_PT(Subproblem &S, const QueryGraph &G, PlanTable &PT,
+void fill_PT(const Subproblem &S, const QueryGraph &G, PlanTable &PT,
              const CardinalityEstimator &CE, const CostFunction &CF, const cnf::CNF &condition,
-             const AdjacencyMatrix &M, size_t len)
+             const AdjacencyMatrix &M, const size_t len)
 {
     if (S.singleton() || PT.has_plan(S))
         return;
@@ -61,7 +58,7 @@ void MyPlanEnumerator::operator()(enumerate_tag, PlanTable &PT, const QueryGraph
     // TODO 3: Implement algorithm for plan enumeration (join ordering).
     auto len = PT.num_sources();
 
-    SmallBitset superSet((0b1 << len) - 1);
+    const SmallBitset superSet((0b1 << len) - 1);
     fill_PT(superSet, G, PT, CE, CF, condition, M, len);
 }
 
