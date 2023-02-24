@@ -30,7 +30,7 @@ void get_subsets(const SmallBitset &superSet, SmallBitset &Left, size_t ind, con
 template <typename PlanTable>
 void fill_PT(const Subproblem &S, const QueryGraph &G, PlanTable &PT,
              const CardinalityEstimator &CE, const CostFunction &CF, const cnf::CNF &condition,
-             const AdjacencyMatrix &M, const size_t len)
+             const AdjacencyMatrix &M, const size_t &len)
 {
     if (S.singleton() || PT.has_plan(S))
         return;
@@ -56,10 +56,48 @@ void MyPlanEnumerator::operator()(enumerate_tag, PlanTable &PT, const QueryGraph
                         // doesn't matter.
 
     // TODO 3: Implement algorithm for plan enumeration (join ordering).
-    auto len = PT.num_sources();
+    auto superSet_size = PT.num_sources();
 
-    const SmallBitset superSet((0b1 << len) - 1);
-    fill_PT(superSet, G, PT, CE, CF, condition, M, len);
+    const SmallBitset superSet((0b1 << superSet_size) - 1);
+    // fill_PT(superSet, G, PT, CE, CF, condition, M, superSet_size);
+
+    std::vector<std::vector<Subproblem>> CSG(superSet_size + 1);
+    for (size_t i = 0; i < superSet_size; i++)
+    {
+        CSG[1].emplace_back(SmallBitset(0b1 << i));
+    }
+
+    for (size_t planSize = 2; planSize <= superSet_size; planSize++)
+    {
+        for (size_t leftPlanSize = 1; leftPlanSize <= planSize / 2; leftPlanSize++)
+        {
+            auto rightPlanSize = planSize - leftPlanSize;
+            for (auto &leftPlan : CSG[leftPlanSize])
+                for (auto &rightPlan : CSG[rightPlanSize])
+                {
+                    auto S = rightPlan | leftPlan;
+                    if (M.is_connected(S) && S.size() == planSize)
+                    {
+                        if(!PT.has_plan(S))
+                            CSG[planSize].emplace_back(S);
+                        PT.update(G, CE, CF, leftPlan, rightPlan, condition);
+                    }
+                }
+        }
+    }
+
+    /*
+    std::cout << superSet_size << std::endl
+              << superSet << std::endl;
+
+    for (size_t row = 1; row < CSG.size(); row++)
+    {
+        std::cout << "row: " << row << std::endl;
+        for (auto e : CSG[row])
+            std::cout << e << std::endl;
+    }
+
+    */
 }
 
 template void MyPlanEnumerator::operator()<PlanTableSmallOrDense &>(enumerate_tag, PlanTableSmallOrDense &, const QueryGraph &, const CostFunction &) const;
