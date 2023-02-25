@@ -69,7 +69,7 @@ private:
         size_type pair_size = sizeof(pair_type);
         size_type usable = NodeSizeInBytes - sizeof(Leaf *) - sizeof(std::vector<pair_type>);
 
-        return NodeSizeInBytes;
+        return 3 * NodeSizeInBytes;
     };
 
     /** Computes the number of keys per `INode`, considering the specified `NodeSizeInBytes`. */
@@ -79,7 +79,7 @@ private:
         size_type pair_size = sizeof(key_type) + sizeof(Node_Entity *);
         size_type usable = NodeSizeInBytes;
 
-        return NodeSizeInBytes;
+        return 2 * NodeSizeInBytes;
     };
 
     struct compare_key_pair
@@ -450,14 +450,20 @@ public:
         root->lower_bound(lo);
         auto lo_iter = lower_bound_iter;
 
-        root->lower_bound(hi);
-        auto hi_iter = lower_bound_iter;
-
         if (lo_iter.index == -1)
             return range(end(), end());
 
+        root->lower_bound(hi);
+        auto hi_iter = lower_bound_iter;
+        // while ((*hi_iter).first() < hi)
+        // {
+        //     ++hi_iter;
+        //     if (hi_iter == end())
+        //         break;
+        // }
+
         if (hi_iter.index == -1)
-            return range(lo_iter, end());
+            hi_iter = end();
 
         return range(lo_iter, hi_iter);
     }
@@ -476,10 +482,10 @@ public:
             return range(end(), end());
 
         root->lower_bound(key);
-        root->upper_bound(key);
-
         if (lower_bound_iter.index == -1)
             return range(end(), end());
+
+        root->upper_bound(key);
 
         if (upper_bound_iter.index == -1)
             return range(lower_bound_iter, end());
