@@ -336,16 +336,23 @@ private:
     template <typename it>
     BTree(it begin, it end) : tree_size(end - begin)
     {
-        nodes.push_back(std::vector<Node_Entity *>());
+        size_t NUM_LEAVES = tree_size / NUM_KEYS_PER_LEAF;
+        if (tree_size % NUM_KEYS_PER_LEAF)
+            NUM_LEAVES++;
+
+        nodes.push_back(std::vector<Node_Entity *>(NUM_LEAVES));
+
+        size_t ind = 0;
         while ((end - begin) > NUM_KEYS_PER_LEAF)
         {
-            nodes.back().push_back(new Leaf(begin, begin + NUM_KEYS_PER_LEAF, this));
+            nodes.back()[ind] = new Leaf(begin, begin + NUM_KEYS_PER_LEAF, this);
             begin += NUM_KEYS_PER_LEAF;
+            ind++;
         }
         if (end - begin > 0)
-            nodes.back().push_back(new Leaf(begin, end, this));
+            nodes.back()[ind] = new Leaf(begin, end, this);
 
-        if (nodes.back().size() > 0)
+        if (NUM_LEAVES > 0)
             root = build_tree();
     }
 
@@ -367,18 +374,25 @@ private:
         {
             auto begin = nodes.back().begin();
             auto end = nodes.back().end();
-            nodes.push_back(std::vector<Node_Entity *>());
 
+            size_t NUM_NODES = nodes.back().size() / NUM_KEYS_PER_INODE;
+            if (nodes.back().size() % NUM_KEYS_PER_INODE)
+                NUM_NODES++;
+
+            nodes.push_back(std::vector<Node_Entity *>(NUM_NODES));
+
+            size_t ind = 0;
             while ((end - begin) > NUM_KEYS_PER_INODE)
             {
-                nodes.back().push_back(new INode(begin, begin + NUM_KEYS_PER_INODE, this));
+                nodes.back()[ind] = new INode(begin, begin + NUM_KEYS_PER_INODE, this);
                 begin += NUM_KEYS_PER_INODE;
+                ind++;
             }
             if (end - begin > 0)
-                nodes.back().push_back(new INode(begin, end, this));
+                nodes.back()[ind] = new INode(begin, end, this);
         }
 
-        return nodes.back().back();
+        return nodes.back()[0];
     }
 
 public:
