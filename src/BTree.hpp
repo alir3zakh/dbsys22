@@ -54,7 +54,7 @@ struct BTree
     using key_type = Key;
     using mapped_type = Value;
     using size_type = std::size_t;
-    using pair_type = ref_pair<const key_type, const mapped_type>;
+    // using pair_type = ref_pair<const key_type, const mapped_type>;
 
     ///> the size of BTree nodes (both `INode` and `Leaf`)
     static constexpr size_type NODE_SIZE_IN_BYTES = NodeSizeInBytes;
@@ -66,10 +66,10 @@ private:
     static constexpr size_type compute_num_keys_per_leaf()
     {
         /* TODO 1.2.1 */
-        size_type pair_size = sizeof(pair_type);
-        size_type usable = NodeSizeInBytes - sizeof(Leaf *) - sizeof(std::vector<pair_type>);
+        size_type pair_size = sizeof(key_type) + sizeof(mapped_type);
+        size_type usable = (NodeSizeInBytes - sizeof(size_t) - 2 * sizeof(Leaf *)) / pair_size;
 
-        return 3 * NodeSizeInBytes;
+        return usable - 1;
     };
 
     /** Computes the number of keys per `INode`, considering the specified `NodeSizeInBytes`. */
@@ -77,15 +77,9 @@ private:
     {
         /* TODO 1.3.1 */
         size_type pair_size = sizeof(key_type) + sizeof(Node_Entity *);
-        size_type usable = NodeSizeInBytes;
+        size_type usable = (NodeSizeInBytes - sizeof(size_t) - sizeof(BTree *)) / pair_size;
 
-        return 2 * NodeSizeInBytes;
-    };
-
-    struct compare_key_pair
-    {
-        bool operator()(const pair_type &a, const key_type &b) { return a.first() < b; };
-        bool operator()(const key_type &a, const pair_type &b) { return a < b.first(); };
+        return usable - 1;
     };
 
 public:
@@ -107,7 +101,9 @@ public:
     struct alignas(NODE_ALIGNMENT_IN_BYTES) Leaf : public Node_Entity
     {
         /* TODO 1.2.2 define fields */
-        std::vector<pair_type> pairs;
+        std::array<key_type, NUM_KEYS_PER_LEAF> keys;
+        std::array<mapped_type, NUM_KEYS_PER_LEAF> vals;
+        size_t length = 0;
         Leaf *next = nullptr;
         BTree *tree;
 
@@ -115,19 +111,21 @@ public:
         template <typename It>
         Leaf(const It &begin, const It &end, BTree *Tree) : tree(Tree)
         {
-            pairs.reserve(NUM_KEYS_PER_LEAF);
-            for (auto iter = begin; iter != end; iter++)
-                pairs.push_back(ref_pair((*iter).first, (*iter).second));
+            for (auto iter = begin; iter != end; iter++, length++)
+            {
+                keys[length] = (*iter).first;
+                vals[length] = (*iter).second;
+            }
         }
 
-        key_type get_pivot() override { return pairs.back().first(); }
+        key_type get_pivot() override { return keys[length - 1]; }
 
         void find(const key_type &key) override
         {
-            if (std::binary_search(pairs.begin(), pairs.end(), key, compare_key_pair()))
+            if (std::binary_search(keys.begin(), keys.begin() + length, key))
             {
-                auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
-                tree->find_iter = iterator(this, it - pairs.begin());
+                auto it = std::lower_bound(keys.begin(), keys.begin() + length, key);
+                tree->find_iter = iterator(this, it - keys.begin());
                 return;
             }
 
@@ -136,24 +134,23 @@ public:
 
         void lower_bound(const key_type &key) override
         {
-            auto it = std::lower_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
+            auto it = std::lower_bound(keys.begin(), keys.begin() + length, key);
 
-            if (it == pairs.end())
+            if (it == keys.begin() + length)
                 tree->lower_bound_iter = iterator(this, -1);
-
             else
-                tree->lower_bound_iter = iterator(this, it - pairs.begin());
+                tree->lower_bound_iter = iterator(this, it - keys.begin());
         }
 
         void upper_bound(const key_type &key) override
         {
-            auto it = std::upper_bound(pairs.begin(), pairs.end(), key, compare_key_pair());
+            auto it = std::upper_bound(keys.begin(), keys.begin() + length, key);
 
-            if (it == pairs.end())
+            if (it == keys.begin() + length)
                 tree->upper_bound_iter = iterator(this, -1);
 
             else
-                tree->upper_bound_iter = iterator(this, it - pairs.begin());
+                tree->upper_bound_iter = iterator(this, it - keys.begin());
         }
     };
     static_assert(sizeof(Leaf) <= NODE_SIZE_IN_BYTES, "Leaf exceeds its size limit");
@@ -162,30 +159,28 @@ public:
     struct alignas(NODE_ALIGNMENT_IN_BYTES) INode : public Node_Entity
     {
         /* TODO 1.3.2 define fields */
-        std::vector<key_type> keys;
-        std::vector<Node_Entity *> node_ptrs;
+        std::array<key_type, NUM_KEYS_PER_INODE> keys;
+        std::array<Node_Entity *, NUM_KEYS_PER_INODE> node_ptrs;
+        size_t length = 0;
         BTree *tree;
 
         /* TODO 1.3.3 define methods */
         template <typename It>
         INode(const It &begin, const It &end, BTree *Tree) : tree(Tree)
         {
-            keys.reserve(NUM_KEYS_PER_INODE);
-            node_ptrs.reserve(NUM_KEYS_PER_INODE);
-
-            for (auto iter = begin; iter < end; iter++)
+            for (auto iter = begin; iter < end; iter++, length++)
             {
-                node_ptrs.push_back(*iter);
-                keys.push_back((*iter)->get_pivot());
+                node_ptrs[length] = *iter;
+                keys[length] = (*iter)->get_pivot();
             }
         }
 
-        key_type get_pivot() override { return keys.back(); }
+        key_type get_pivot() override { return keys[length - 1]; }
 
         void find(const key_type &key) override
         {
-            auto it = std::lower_bound(keys.begin(), keys.end(), key);
-            if (it == keys.end())
+            auto it = std::lower_bound(keys.begin(), keys.begin() + length, key);
+            if (it == keys.begin() + length)
                 tree->find_iter = iterator(nullptr, -1);
             else
                 node_ptrs[it - keys.begin()]->find(key);
@@ -193,8 +188,8 @@ public:
 
         void lower_bound(const key_type &key) override
         {
-            auto it = std::lower_bound(keys.begin(), keys.end(), key);
-            if (it == keys.end())
+            auto it = std::lower_bound(keys.begin(), keys.begin() + length, key);
+            if (it == keys.begin() + length)
                 tree->lower_bound_iter = iterator(nullptr, -1);
             else
                 node_ptrs[it - keys.begin()]->lower_bound(key);
@@ -202,8 +197,8 @@ public:
 
         void upper_bound(const key_type &key) override
         {
-            auto it = std::upper_bound(keys.begin(), keys.end(), key);
-            if (it == keys.end())
+            auto it = std::upper_bound(keys.begin(), keys.begin() + length, key);
+            if (it == keys.begin() + length)
                 tree->upper_bound_iter = iterator(nullptr, -1);
             else
                 node_ptrs[it - keys.begin()]->upper_bound(key);
@@ -247,7 +242,7 @@ private:
             if (this->current != nullptr)
             {
                 index++;
-                if (index == current->pairs.size())
+                if (index == current->length)
                 {
                     current = current->next;
                     index = 0;
@@ -264,10 +259,10 @@ private:
             return copy;
         }
 
-        ref_pair<const key_type, const value_type> operator*() const
+        ref_pair<const key_type, value_type> operator*() const
         {
             /* TODO 1.4.3 */
-            return current->pairs[index];
+            return ref_pair<const key_type, value_type>(current->keys[index], current->vals[index]);
         }
     };
 
